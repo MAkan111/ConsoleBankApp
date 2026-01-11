@@ -3,10 +3,7 @@ package ru.makan1.bankapp.repository;
 import org.springframework.stereotype.Component;
 import ru.makan1.bankapp.model.Account;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -18,8 +15,8 @@ public class InMemoryAccountRepository {
         dataStore.put(account.getId().toString(), account);
     }
 
-    public Account findById(Long id) {
-        return dataStore.get(key(id));
+    public Optional<Account> findById(Long id) {
+        return Optional.ofNullable(dataStore.get(key(id)));
     }
 
     public Collection<Account> findAll() {

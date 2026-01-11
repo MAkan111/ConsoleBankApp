@@ -14,12 +14,6 @@ public class Account {
         this.id = counter.incrementAndGet();
     }
 
-    public Account(Long userId, Double moneyAmount) {
-        this.id = counter.incrementAndGet();
-        this.userId = userId;
-        this.moneyAmount = moneyAmount;
-    }
-
     public Long getId() {
         return id;
     }
@@ -48,7 +42,7 @@ public class Account {
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;
         Account account = (Account) o;
-        return Objects.equals(id, account.id) && Objects.equals(userId, account.userId) && Objects.equals(moneyAmount, account.moneyAmount);
+        return Objects.equals(id, account.id);
     }
 
     @Override

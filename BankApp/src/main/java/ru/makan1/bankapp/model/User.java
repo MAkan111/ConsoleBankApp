@@ -1,5 +1,7 @@
 package ru.makan1.bankapp.model;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
@@ -7,7 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class User {
     Long id;
     String login;
-    List<Account> accountList;
+    List<Account> accountList = new ArrayList<>();
     private static final AtomicLong counter = new AtomicLong();
 
     public User() {
@@ -23,7 +25,7 @@ public class User {
     }
 
     public List<Account> getAccountList() {
-        return accountList;
+        return Collections.unmodifiableList(accountList);
     }
 
     public void setId(Long id) {
@@ -32,10 +34,6 @@ public class User {
 
     public void setLogin(String login) {
         this.login = login;
-    }
-
-    public void setAccountList(List<Account> accountList) {
-        this.accountList = accountList;
     }
 
     @Override
@@ -57,5 +55,16 @@ public class User {
                 ", login='" + login + '\'' +
                 ", accounts=" + accountList +
                 '}';
+    }
+
+    public void addAccount(Account account) {
+        if(account == null) {
+            throw new IllegalArgumentException("Счет не может быть null");
+        }
+        accountList.add(account);
+    }
+
+    public void removeAccountById(Long accountId) {
+        accountList.removeIf(a -> Objects.equals(a.getId(), accountId));
     }
 }

@@ -5,6 +5,7 @@ import ru.makan1.bankapp.model.User;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -16,8 +17,8 @@ public class InMemoryUserRepository {
         dataStore.put(key(user.getId()), user);
     }
 
-    public User findById(Long id) {
-        return dataStore.get(key(id));
+    public Optional<User> findById(Long id) {
+        return Optional.ofNullable(dataStore.get(key(id)));
     }
 
     public Collection<User> findAll() {
@@ -32,10 +33,9 @@ public class InMemoryUserRepository {
         return id.toString();
     }
 
-    public User findByLogin(String login) {
+    public Optional<User> findByLogin(String login) {
         return dataStore.values().stream()
                 .filter(u -> login.equalsIgnoreCase(u.getLogin()))
-                .findFirst()
-                .orElse(null);
+                .findFirst();
     }
 }

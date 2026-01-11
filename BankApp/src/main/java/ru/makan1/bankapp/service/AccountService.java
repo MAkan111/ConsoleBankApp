@@ -17,17 +17,20 @@ public class AccountService {
     private final InMemoryAccountRepository inMemoryAccountRepository;
     private final InMemoryUserRepository inMemoryUserRepository;
 
-    public AccountService(AccountProperties accountProperties, InMemoryAccountRepository inMemoryAccountRepository, InMemoryUserRepository inMemoryUserRepository) {
+    public AccountService(AccountProperties accountProperties,
+                          InMemoryAccountRepository inMemoryAccountRepository,
+                          InMemoryUserRepository inMemoryUserRepository
+    ) {
         this.accountProperties = accountProperties;
         this.inMemoryAccountRepository = inMemoryAccountRepository;
         this.inMemoryUserRepository = inMemoryUserRepository;
     }
 
     public void createAccount(Long userId) {
-        User user = inMemoryUserRepository.findById(userId);
-        if (user == null) {
-            throw new UserNotFoundException("Пользователь c userId: " + userId + " не найден");
-        }
+        User user = inMemoryUserRepository
+                .findById(userId)
+                .orElseThrow(() ->
+                new UserNotFoundException("Пользователь c userId: " + userId + " не найден"));;
 
         Account account = new Account();
         account.setUserId(userId);
@@ -35,27 +38,21 @@ public class AccountService {
 
         inMemoryAccountRepository.save(account);
 
-        if (user.getAccountList() == null) {
-            user.setAccountList(new ArrayList<>());
-        }
-
-        user.getAccountList().add(account);
+        user.addAccount(account);
 
         inMemoryUserRepository.save(user);
     }
 
     public void closeAccount(Long accountId) {
-        Account accountToClose = inMemoryAccountRepository.findById(accountId);
-        if (accountToClose == null) {
-            throw new IllegalArgumentException("Счет не найден accountId " + accountId);
-        }
+        Account accountToClose = inMemoryAccountRepository
+                .findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountId));
 
-        User user = inMemoryUserRepository.findById(accountToClose.getUserId());
-        if (user == null) {
-            throw new IllegalArgumentException("Пользователь для счета accountId: " + accountToClose.getUserId() + " не найден");
-        }
+        User user = inMemoryUserRepository
+                .findById(accountToClose.getUserId())
+                .orElseThrow(() -> new UserNotFoundException("Пользователь для счета accountId: " + accountToClose.getUserId() + " не найден"));
 
-        List<Account> userAccounts = inMemoryAccountRepository.findByUserId(accountToClose.getUserId());
+        List<Account> userAccounts = user.getAccountList();
 
         if (userAccounts.size() <= 1) {
             throw new IllegalArgumentException("Нельзя закрыть единственный счет пользователя");
@@ -73,9 +70,7 @@ public class AccountService {
 
         inMemoryAccountRepository.deleteById(accountId);
 
-        if (user.getAccountList() != null) {
-            user.getAccountList().removeIf(a -> Objects.equals(a.getId(), accountId));
-        }
+        user.removeAccountById(accountId);
 
         inMemoryUserRepository.save(user);
     }
@@ -93,8 +88,14 @@ public class AccountService {
         if (amount == null || amount <= 0) {
             throw new IllegalArgumentException("Сумма должна перевода быть больше 0");
         }
-        Account accountFrom = inMemoryAccountRepository.findById(accountIdFrom);
-        Account accountTo = inMemoryAccountRepository.findById(accountIdTo);
+        Account accountFrom = inMemoryAccountRepository
+                .findById(accountIdFrom)
+                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountIdFrom));
+
+        Account accountTo = inMemoryAccountRepository
+                .findById(accountIdTo)
+                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountIdTo));
+
         double commission = 0.0;
 
         boolean differentUsers = !Objects.equals(accountFrom.getUserId(), accountTo.getUserId());
@@ -120,7 +121,10 @@ public class AccountService {
             throw new IllegalArgumentException("Сумма не может быть null или меньше/равна нулю");
         }
 
-        Account account = inMemoryAccountRepository.findById(userId);
+        Account account = inMemoryAccountRepository
+                .findById(userId)
+                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + userId));
+
         if (amount > account.getMoneyAmount()) {
             throw new IllegalArgumentException("Недостаточно средств на счете");
         }

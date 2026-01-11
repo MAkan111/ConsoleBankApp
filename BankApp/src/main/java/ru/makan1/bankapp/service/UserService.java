@@ -5,6 +5,7 @@ import ru.makan1.bankapp.model.User;
 import ru.makan1.bankapp.repository.InMemoryUserRepository;
 
 import java.util.ArrayList;
+import java.util.Collection;
 
 @Component
 public class UserService {
@@ -18,19 +19,18 @@ public class UserService {
     }
 
     public void createUser(String login) {
-        if (inMemoryUserRepository.findByLogin(login) != null) {
+        if (inMemoryUserRepository.findByLogin(login).isPresent()) {
             throw new IllegalArgumentException("Пользователь с таким логином уже есть");
         }
 
         User user = new User();
         user.setLogin(login);
-        user.setAccountList(new ArrayList<>());
 
         inMemoryUserRepository.save(user);
         userAccountService.createUserAccount(login);
     }
 
-    public void showAllUsers() {
-        System.out.println(inMemoryUserRepository.findAll().toString());
+    public Collection<User> showAllUsers() {
+        return inMemoryUserRepository.findAll();
     }
 }
