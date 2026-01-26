@@ -14,7 +14,7 @@ public class TransactionHelper {
         this.transactionManager = transactionManager;
     }
 
-    public <T> T executeAndGet(Supplier<T> action) {
+    public <T> T executeAndGet(Supplier<T> action) throws Exception {
         transactionManager.begin();
         try {
             T result = action.get();
@@ -26,7 +26,7 @@ public class TransactionHelper {
         }
     }
 
-    public void execute(Runnable action) {
+    public void execute(Runnable action) throws Exception {
         transactionManager.begin();
         try {
             action.run();

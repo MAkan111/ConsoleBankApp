@@ -29,7 +29,7 @@ public class AccountService {
         this.transactionHelper = transactionHelper;
     }
 
-    public void createAccount(Long userId) {
+    public void createAccount(Long userId) throws Exception {
         transactionHelper.execute(() -> {
             User user = dbUserRepository.findById(userId)
                     .orElseThrow(() -> new UserNotFoundException("Пользователь c userId: " + userId + " не найден"));
@@ -42,7 +42,7 @@ public class AccountService {
         });
     }
 
-    public void closeAccount(Long accountId) {
+    public void closeAccount(Long accountId) throws Exception {
         transactionHelper.execute(() -> {
             Account accountToClose = dbAccountRepository.findById(accountId)
                     .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountId));
@@ -66,7 +66,7 @@ public class AccountService {
         });
     }
 
-    public void accountDeposit(Long accountId, Double amount) {
+    public void accountDeposit(Long accountId, Double amount) throws Exception {
         transactionHelper.execute(() -> {
             Account account = dbAccountRepository.findById(accountId)
                     .orElseThrow(() -> new AccountNotFoundException("Счет: " + accountId + " не найден"));
@@ -76,7 +76,7 @@ public class AccountService {
         });
     }
 
-    public void accountTransfer(Long accountIdFrom, Long accountIdTo, Double amount) {
+    public void accountTransfer(Long accountIdFrom, Long accountIdTo, Double amount) throws Exception {
         if (amount == null || amount <= 0) {
             throw new IllegalArgumentException("Сумма должна перевода быть больше 0");
         }
@@ -88,18 +88,7 @@ public class AccountService {
             Account accountTo = dbAccountRepository.findById(accountIdTo)
                     .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountIdTo));
 
-            double commission = 0.0;
-
-            boolean differentUsers = !Objects.equals(accountFrom.getUser().getId(), accountTo.getUser().getId());
-            if (differentUsers) {
-                commission = accountProperties.getTransferCommission();
-            }
-
-            double total = amount + (amount * commission);
-
-            if (accountFrom.getMoneyAmount() < total) {
-                throw new IllegalArgumentException("Недостаточно средств на счете отправителя. Нужно " + total);
-            }
+            double total = getTotal(amount, accountFrom, accountTo);
 
             accountFrom.setMoneyAmount(accountFrom.getMoneyAmount() - total);
             accountTo.setMoneyAmount(accountTo.getMoneyAmount() + amount);
@@ -109,7 +98,7 @@ public class AccountService {
         });
     }
 
-    public void accountWithdraw(Long userId, Double amount) {
+    public void accountWithdraw(Long userId, Double amount) throws Exception {
         if (amount == null || amount <= 0) {
             throw new IllegalArgumentException("Сумма не может быть null или меньше/равна нулю");
         }
@@ -124,5 +113,21 @@ public class AccountService {
             account.setMoneyAmount(account.getMoneyAmount() - amount);
             dbAccountRepository.update(account);
         });
+    }
+
+    private double getTotal(Double amount, Account accountFrom, Account accountTo) {
+        double commission = 0.0;
+
+        boolean differentUsers = !Objects.equals(accountFrom.getUser().getId(), accountTo.getUser().getId());
+        if (differentUsers) {
+            commission = accountProperties.getTransferCommission();
+        }
+
+        double total = amount + (amount * commission);
+
+        if (accountFrom.getMoneyAmount() < total) {
+            throw new IllegalArgumentException("Недостаточно средств на счете отправителя. Нужно " + total);
+        }
+        return total;
     }
 }

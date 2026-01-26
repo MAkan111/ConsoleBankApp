@@ -35,7 +35,7 @@ public class UserService {
         this.dbAccountRepository = dbAccountRepository;
     }
 
-    public void createUser(String login) {
+    public void createUser(String login) throws Exception {
         transactionHelper.execute(() -> {
             if (dbUserRepository.findByLogin(login).isPresent()) {
                 throw new IllegalArgumentException("Пользователь с таким логином уже есть");
@@ -52,7 +52,7 @@ public class UserService {
         });
     }
 
-    public Collection<UserAccountDto> showAllUsers() {
+    public Collection<UserAccountDto> showAllUsers() throws Exception {
         return transactionHelper.executeAndGet(() -> {
             List<User> users = dbUserRepository.findAll();
             List<Account> accounts = dbAccountRepository.findAll();

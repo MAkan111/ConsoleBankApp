@@ -10,6 +10,7 @@ public class TransactionManager {
     private final SessionFactory sessionFactory;
 
     private final ThreadLocal<Session> sessionThreadLocal = new ThreadLocal<>();
+    private final ThreadLocal<Integer> nestingLevel = ThreadLocal.withInitial(() -> 0);
 
     public TransactionManager(SessionFactory sessionFactory) {
         this.sessionFactory = sessionFactory;
@@ -18,40 +19,57 @@ public class TransactionManager {
     public Session currentSession() {
         Session session = sessionThreadLocal.get();
         if (session == null) {
-            session = sessionFactory.openSession();
-            sessionThreadLocal.set(session);
+            throw new IllegalStateException("Нет активной транзакции.");
         }
         return session;
     }
 
     public void begin() {
-        Session session = sessionThreadLocal.get();
-        if (session == null) {
-            session = sessionFactory.openSession();
+        int level = this.nestingLevel.get();
+
+        if (level == 0) {
+            Session session = sessionFactory.openSession();
             session.beginTransaction();
             sessionThreadLocal.set(session);
-        } else if (!session.getTransaction().isActive()) {
-            session.getTransaction().begin();
         }
+
+        nestingLevel.set(level + 1);
     }
 
     public void commit() {
-        try (Session session = sessionThreadLocal.get()) {
-            if (session.getTransaction().isActive()) {
-                session.getTransaction().commit();
+        int level = this.nestingLevel.get();
+
+        if (level == 0) {
+            throw new IllegalStateException("Нет активной транзакции");
+        }
+
+        nestingLevel.set(level - 1);
+
+        if (level == 1) {
+            try (Session session = sessionThreadLocal.get()) {
+                if (session != null && session.getTransaction().isActive()) {
+                    session.getTransaction().commit();
+                }
+            } finally {
+                sessionThreadLocal.remove();
+                nestingLevel.remove();
             }
-        } finally {
-            sessionThreadLocal.remove();
         }
     }
 
     public void rollback() {
-        try (Session session = sessionThreadLocal.get()) {
-            if (session.getTransaction().isActive()) {
+        Session session = sessionThreadLocal.get();
+
+        try {
+            if (session != null && session.getTransaction().isActive()) {
                 session.getTransaction().rollback();
             }
         } finally {
+            if (session != null) {
+                session.close();
+            }
             sessionThreadLocal.remove();
+            nestingLevel.remove();
         }
     }
 }
