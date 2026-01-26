@@ -6,99 +6,119 @@ import ru.makan1.bankapp.exception.AccountNotFoundException;
 import ru.makan1.bankapp.exception.UserNotFoundException;
 import ru.makan1.bankapp.model.Account;
 import ru.makan1.bankapp.model.User;
-import ru.makan1.bankapp.repository.InMemoryAccountRepository;
-import ru.makan1.bankapp.repository.InMemoryUserRepository;
+import ru.makan1.bankapp.repository.database.DBAccountRepository;
+import ru.makan1.bankapp.repository.database.DBUserRepository;
 
 import java.util.*;
 
 @Component
 public class AccountService {
     private final AccountProperties accountProperties;
-    private final InMemoryAccountRepository inMemoryAccountRepository;
-    private final InMemoryUserRepository inMemoryUserRepository;
+    private final DBUserRepository dbUserRepository;
+    private final DBAccountRepository dbAccountRepository;
+    private final TransactionHelper transactionHelper;
 
     public AccountService(AccountProperties accountProperties,
-                          InMemoryAccountRepository inMemoryAccountRepository,
-                          InMemoryUserRepository inMemoryUserRepository
+                          DBUserRepository dbUserRepository,
+                          DBAccountRepository dbAccountRepository,
+                          TransactionHelper transactionHelper
     ) {
         this.accountProperties = accountProperties;
-        this.inMemoryAccountRepository = inMemoryAccountRepository;
-        this.inMemoryUserRepository = inMemoryUserRepository;
+        this.dbUserRepository = dbUserRepository;
+        this.dbAccountRepository = dbAccountRepository;
+        this.transactionHelper = transactionHelper;
     }
 
-    public void createAccount(Long userId) {
-        User user = inMemoryUserRepository
-                .findById(userId)
-                .orElseThrow(() ->
-                new UserNotFoundException("Пользователь c userId: " + userId + " не найден"));;
+    public void createAccount(Long userId) throws Exception {
+        transactionHelper.execute(() -> {
+            User user = dbUserRepository.findById(userId)
+                    .orElseThrow(() -> new UserNotFoundException("Пользователь c userId: " + userId + " не найден"));
 
-        Account account = new Account();
-        account.setUserId(userId);
-        account.setMoneyAmount(accountProperties.getDefaultAmount());
+            Account account = new Account();
+            account.setMoneyAmount(accountProperties.getDefaultAmount());
+            account.setUser(user);
 
-        inMemoryAccountRepository.save(account);
-
-        user.addAccount(account);
-
-        inMemoryUserRepository.save(user);
+            dbAccountRepository.save(account);
+        });
     }
 
-    public void closeAccount(Long accountId) {
-        Account accountToClose = inMemoryAccountRepository
-                .findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountId));
+    public void closeAccount(Long accountId) throws Exception {
+        transactionHelper.execute(() -> {
+            Account accountToClose = dbAccountRepository.findById(accountId)
+                    .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountId));
 
-        User user = inMemoryUserRepository
-                .findById(accountToClose.getUserId())
-                .orElseThrow(() -> new UserNotFoundException("Пользователь для счета accountId: " + accountToClose.getUserId() + " не найден"));
+            User user = accountToClose.getUser();
+            List<Account> userAccounts = user.getAccountList();
 
-        List<Account> userAccounts = user.getAccountList();
+            if (userAccounts.size() <= 1) {
+                throw new IllegalArgumentException("Нельзя закрыть единственный счет пользователя");
+            }
 
-        if (userAccounts.size() <= 1) {
-            throw new IllegalArgumentException("Нельзя закрыть единственный счет пользователя");
-        }
+            Account target = userAccounts.stream()
+                    .filter(a -> !Objects.equals(a.getId(), accountId))
+                    .findFirst()
+                    .orElseThrow(() -> new AccountNotFoundException("Не найден счет для перевода остатка"));
 
-        Account target = userAccounts.stream()
-                .filter(a -> !Objects.equals(a.getId(), accountId))
-                .findFirst()
-                .orElseThrow(() -> new AccountNotFoundException("Не найден счет для перевода остатка"));
+            double amount = accountToClose.getMoneyAmount() == null ? 0d : accountToClose.getMoneyAmount();
+            target.setMoneyAmount(target.getMoneyAmount() + amount);
 
-        double accountAmount = accountToClose.getMoneyAmount() == null ? 0.0 : accountToClose.getMoneyAmount();
-        if (accountAmount > 0) {
-            accountTransfer(accountId, target.getId(), accountAmount);
-        }
-
-        inMemoryAccountRepository.deleteById(accountId);
-
-        user.removeAccountById(accountId);
-
-        inMemoryUserRepository.save(user);
+            dbAccountRepository.deleteById(accountId);
+        });
     }
 
-    public void accountDeposit(Long userId, Double amount) {
-        Account account = inMemoryAccountRepository.findByUserId(userId).get(0);
-        if (account == null) {
-            throw new AccountNotFoundException("Счет для пользователя userId: " + userId + " не найден");
-        }
-        account.setMoneyAmount(account.getMoneyAmount() + amount);
-        inMemoryAccountRepository.save(account);
+    public void accountDeposit(Long accountId, Double amount) throws Exception {
+        transactionHelper.execute(() -> {
+            Account account = dbAccountRepository.findById(accountId)
+                    .orElseThrow(() -> new AccountNotFoundException("Счет: " + accountId + " не найден"));
+
+            account.setMoneyAmount(account.getMoneyAmount() + amount);
+            dbAccountRepository.update(account);
+        });
     }
 
-    public void accountTransfer(Long accountIdFrom, Long accountIdTo, Double amount) {
+    public void accountTransfer(Long accountIdFrom, Long accountIdTo, Double amount) throws Exception {
         if (amount == null || amount <= 0) {
             throw new IllegalArgumentException("Сумма должна перевода быть больше 0");
         }
-        Account accountFrom = inMemoryAccountRepository
-                .findById(accountIdFrom)
-                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountIdFrom));
 
-        Account accountTo = inMemoryAccountRepository
-                .findById(accountIdTo)
-                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountIdTo));
+        transactionHelper.execute(() -> {
+            Account accountFrom = dbAccountRepository.findById(accountIdFrom)
+                    .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountIdFrom));
 
+            Account accountTo = dbAccountRepository.findById(accountIdTo)
+                    .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + accountIdTo));
+
+            double total = getTotal(amount, accountFrom, accountTo);
+
+            accountFrom.setMoneyAmount(accountFrom.getMoneyAmount() - total);
+            accountTo.setMoneyAmount(accountTo.getMoneyAmount() + amount);
+
+            dbAccountRepository.update(accountFrom);
+            dbAccountRepository.update(accountTo);
+        });
+    }
+
+    public void accountWithdraw(Long userId, Double amount) throws Exception {
+        if (amount == null || amount <= 0) {
+            throw new IllegalArgumentException("Сумма не может быть null или меньше/равна нулю");
+        }
+
+        transactionHelper.execute(() -> {
+            Account account = dbAccountRepository.findById(userId)
+                    .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + userId));
+
+            if (amount > account.getMoneyAmount()) {
+                throw new IllegalArgumentException("Недостаточно средств на счете");
+            }
+            account.setMoneyAmount(account.getMoneyAmount() - amount);
+            dbAccountRepository.update(account);
+        });
+    }
+
+    private double getTotal(Double amount, Account accountFrom, Account accountTo) {
         double commission = 0.0;
 
-        boolean differentUsers = !Objects.equals(accountFrom.getUserId(), accountTo.getUserId());
+        boolean differentUsers = !Objects.equals(accountFrom.getUser().getId(), accountTo.getUser().getId());
         if (differentUsers) {
             commission = accountProperties.getTransferCommission();
         }
@@ -108,27 +128,6 @@ public class AccountService {
         if (accountFrom.getMoneyAmount() < total) {
             throw new IllegalArgumentException("Недостаточно средств на счете отправителя. Нужно " + total);
         }
-
-        accountFrom.setMoneyAmount(accountFrom.getMoneyAmount() - total);
-        accountTo.setMoneyAmount(accountTo.getMoneyAmount() + amount);
-
-        inMemoryAccountRepository.save(accountFrom);
-        inMemoryAccountRepository.save(accountTo);
-    }
-
-    public void accountWithdraw(Long userId, Double amount) {
-        if (amount == null || amount <= 0) {
-            throw new IllegalArgumentException("Сумма не может быть null или меньше/равна нулю");
-        }
-
-        Account account = inMemoryAccountRepository
-                .findById(userId)
-                .orElseThrow(() -> new AccountNotFoundException("Счет не найден accountId " + userId));
-
-        if (amount > account.getMoneyAmount()) {
-            throw new IllegalArgumentException("Недостаточно средств на счете");
-        }
-        account.setMoneyAmount(account.getMoneyAmount() - amount);
-        inMemoryAccountRepository.save(account);
+        return total;
     }
 }
