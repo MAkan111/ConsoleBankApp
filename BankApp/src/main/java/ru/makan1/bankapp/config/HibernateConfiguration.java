@@ -24,6 +24,12 @@ public class HibernateConfiguration {
     @Value("${hibernate.connection.driver_class}")
     String driver;
 
+    @Value("${hibernate.show_sql}")
+    String showSql;
+
+    @Value("${hibernate.hbm2ddl.auto}")
+    String ddlAuto;
+
     @Bean
     public SessionFactory sessionFactory() {
         org.hibernate.cfg.Configuration configuration = new org.hibernate.cfg.Configuration();
@@ -35,8 +41,8 @@ public class HibernateConfiguration {
                 .setProperty("hibernate.connection.url", connectionUrl)
                 .setProperty("hibernate.connection.username", username)
                 .setProperty("hibernate.connection.password", password)
-                .setProperty("hibernate.show_sql", "true")
-                .setProperty("hibernate.hbm2ddl.auto", "update");
+                .setProperty("hibernate.show_sql", showSql)
+                .setProperty("hibernate.hbm2ddl.auto", ddlAuto);
 
         return configuration.buildSessionFactory();
     }

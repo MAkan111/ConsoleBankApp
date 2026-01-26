@@ -35,7 +35,6 @@ public class UserService {
         this.dbAccountRepository = dbAccountRepository;
     }
 
-    @Transactional
     public void createUser(String login) {
         transactionHelper.execute(() -> {
             if (dbUserRepository.findByLogin(login).isPresent()) {
